@@ -1,5 +1,6 @@
 #include "cli.h"
 
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string_view>
@@ -90,6 +91,13 @@ s8 _parse_args(int argc, char** argv, Input* input)
     }
 #undef IF_ARG
   }
+
+  if(!input->seed)
+  {
+    input->seed = (u64) time(nullptr);
+  }
+
+  srand(input->seed);
 
   print_input(input);
 

@@ -80,13 +80,6 @@ int main(int argc, char *argv[])
     goto end;
   }
 
-  if(input.seed){
-    srand(input.seed);
-  }
-  else{
-    srand(time(nullptr));
-  }
-
   if((res =_create_solution_file(&input, &o_file_sol))<0){
     printf("error creating solution file: %d\n", res);
     goto end;

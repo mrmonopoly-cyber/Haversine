@@ -4,3 +4,4 @@ build
 main
 out.json
 out.json
+*.json
