@@ -1,5 +1,7 @@
 #include "cli.h"
 
+#include <errno.h>
+#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string_view>
@@ -34,6 +36,15 @@ static inline void print_input(Input* input)
 {
   printf("seed: %lu\n", input->seed);
   printf("num points: %lu\n", input->num_points);
+  printf("out file: ");
+  if(input->o_file_path)
+  {
+    printf("%s\n", input->o_file_path);
+  }
+  else
+  {
+    printf("stdout\n");
+  }
 }
 
 static inline void _help(void)
@@ -42,6 +53,7 @@ static inline void _help(void)
   printf("options: \n");
   printf(TAB_ALIGN_1"-h" TAB_ALIGN_3"print help\n");
   printf(TAB_ALIGN_1"-s [seed]" TAB_ALIGN_2"specify the seed (default is 0)\n");
+  printf(TAB_ALIGN_1"-o [path]" TAB_ALIGN_2"specify the output file (default stdout)\n");
 }
 
 s8 _parse_args(int argc, char** argv, Input* input)
@@ -70,19 +82,33 @@ s8 _parse_args(int argc, char** argv, Input* input)
       arg = _next_argv();
       sscanf(arg, "%lu", &input->seed);
     }
+    IF_ARG(-o)
+    {
+      input->o_file_path =  _next_argv();
+    }
     else
     {
       sscanf(arg, "%lu", &input->num_points);
     }
 #undef IF_ARG
   }
-  
+
   if (input->num_points == 0)
   {
     res = -1;
     printf("invalid input: num points must be > 0\n");
     _help();
     goto end;
+  }
+
+  if (input->o_file_path != nullptr)
+  {
+    input->o_file = fopen(input->o_file_path, "ra");
+    if (input->o_file == nullptr)
+    {
+      res = -2;
+      printf("error opening o_file %s: %s\n", arg, strerror(errno));
+    }
   }
 
   print_input(input);
