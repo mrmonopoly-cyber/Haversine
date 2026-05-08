@@ -38,22 +38,14 @@ int main(int argc, char *argv[])
     goto end;
   }
 
-  if(input.seed){
-    srand(input.seed);
-  }
-  else{
-    srand(time(nullptr));
-  }
+  srand(!(input.seed) && time(nullptr));
 
-  if(input.o_file_path)
+  o_file = fopen(input.o_file_path, "wa");
+  if (o_file == nullptr)
   {
-    o_file = fopen(input.o_file_path, "wa");
-    if (o_file == nullptr)
-    {
-      res = -2;
-      printf("error opening o_file %s: %s\n", input.o_file_path, strerror(errno));
-      goto end;
-    }
+    res = -2;
+    printf("error opening o_file %s: %s\n", input.o_file_path, strerror(errno));
+    goto end;
   }
 
   fprintf(o_file,"{\"pairs\":[");
@@ -70,6 +62,6 @@ int main(int argc, char *argv[])
   fprintf(o_file, "\n]}\n");
   
 end:
-  if(input.o_file_path && o_file) fclose(o_file);
+  if(o_file) fclose(o_file);
   return res;
 }
