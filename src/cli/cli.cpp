@@ -47,7 +47,7 @@ static inline void print_input(Input* input)
 
 static inline void _help(void)
 {
-  printf("usage: <options> [num_points > 0]\n");
+  printf("usage: <options> [num_points]\n");
   printf("options: \n");
   printf(TAB_ALIGN_1"-h" TAB_ALIGN_3"print help\n");
   printf(TAB_ALIGN_1"-s [seed]" TAB_ALIGN_2"specify the seed (default is 0)\n");
@@ -86,17 +86,9 @@ s8 _parse_args(int argc, char** argv, Input* input)
     }
     else
     {
-      sscanf(arg, "%lu", &input->num_points);
+      sscanf(sw.begin(), "%lu", &input->num_points);
     }
 #undef IF_ARG
-  }
-
-  if (input->num_points == 0)
-  {
-    res = -1;
-    printf("invalid input: num points must be > 0\n");
-    _help();
-    goto end;
   }
 
   print_input(input);
