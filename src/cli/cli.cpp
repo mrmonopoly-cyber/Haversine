@@ -103,11 +103,11 @@ s8 _parse_args(int argc, char** argv, Input* input)
 
   if (input->o_file_path != nullptr)
   {
-    input->o_file = fopen(input->o_file_path, "ra");
+    input->o_file = fopen(input->o_file_path, "wa");
     if (input->o_file == nullptr)
     {
       res = -2;
-      printf("error opening o_file %s: %s\n", arg, strerror(errno));
+      printf("error opening o_file %s: %s\n", input->o_file_path, strerror(errno));
     }
   }
 
