@@ -1,7 +1,5 @@
 #include "cli.h"
 
-#include <errno.h>
-#include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string_view>
@@ -99,16 +97,6 @@ s8 _parse_args(int argc, char** argv, Input* input)
     printf("invalid input: num points must be > 0\n");
     _help();
     goto end;
-  }
-
-  if (input->o_file_path != nullptr)
-  {
-    input->o_file = fopen(input->o_file_path, "wa");
-    if (input->o_file == nullptr)
-    {
-      res = -2;
-      printf("error opening o_file %s: %s\n", input->o_file_path, strerror(errno));
-    }
   }
 
   print_input(input);
