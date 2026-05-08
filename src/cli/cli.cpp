@@ -51,7 +51,7 @@ static inline void _help(void)
   printf("options: \n");
   printf(TAB_ALIGN_1"-h" TAB_ALIGN_3"print help\n");
   printf(TAB_ALIGN_1"-s [seed]" TAB_ALIGN_2"specify the seed (default is 0)\n");
-  printf(TAB_ALIGN_1"-o [path]" TAB_ALIGN_2"specify the output file (default stdout)\n");
+  printf(TAB_ALIGN_1"-o [path]" TAB_ALIGN_2"specify the output file (" DEFAULT_O_FILE ")\n");
 }
 
 s8 _parse_args(int argc, char** argv, Input* input)
