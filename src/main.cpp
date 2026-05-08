@@ -38,7 +38,12 @@ int main(int argc, char *argv[])
     goto end;
   }
 
-  srand(!(input.seed) && time(nullptr));
+  if(input.seed){
+    srand(input.seed);
+  }
+  else{
+    srand(time(nullptr));
+  }
 
   o_file = fopen(input.o_file_path, "wa");
   if (o_file == nullptr)
