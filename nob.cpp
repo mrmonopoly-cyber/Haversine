@@ -24,11 +24,16 @@ extern "C"
   X(-Wextra)\
   X(-pedantic)\
   X(-xc++)\
+  X(-g)\
   X(-std=c++17)\
+  X(-fsanitize=address)\
+  X(-I../src/haversine_defs)\
 
 #define LINKER_ARGS \
   X(-Wall)\
   X(-Wextra)\
+  X(-fsanitize=address)\
+
 
 #define O_FILE "main"
 
@@ -81,6 +86,8 @@ int main(int argc, char **argv)
 
   mkdir_if_not_exists(BUILD_DIR);
   set_current_dir(BUILD_DIR);
+
+  nob_log(INFO, "current dir: %s", get_current_dir_temp());
   
   if(!walk_dir(src_dir, compile_obj))
   {
