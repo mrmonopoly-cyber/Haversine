@@ -65,8 +65,8 @@ int main(int argc, char *argv[])
 
   }
   fprintf(o_file, "\n]}\n");
+  fclose(o_file);
   
 end:
-  if(o_file) fclose(o_file);
   return res;
 }
