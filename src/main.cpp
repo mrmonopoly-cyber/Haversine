@@ -8,14 +8,25 @@
 #define TAB_ALIGN_2 "\t\t"
 #define TAB_ALIGN_3 "\t\t\t"
 
+#define DEFAULT_SEED (0)
+
 struct Input{
+  u64 seed = DEFAULT_SEED;
+  u64 num_points;
 };
 
-void _help(void)
+void inline print_input(Input* input, FILE* out)
 {
-  printf("usage: \n");
+  fprintf(out, "seed: %lu\n", input->seed);
+  fprintf(out, "num points: %lu\n", input->num_points);
+}
+
+void inline _help(void)
+{
+  printf("usage: <options> [num_points > 0]\n");
   printf("options: \n");
   printf(TAB_ALIGN_1"-h" TAB_ALIGN_3"print help\n");
+  printf(TAB_ALIGN_1"-s [seed]" TAB_ALIGN_2"specify the seed (default is 0)\n");
 }
 
 static inline char* _next_argv(int argc=0, char** argv=nullptr)
@@ -65,6 +76,15 @@ static s8 _parse_args(int argc, char** argv, Input* input)
       _help();
       exit(0);
     }
+    IF_ARG(-s)
+    {
+      arg = _next_argv();
+      sscanf(arg, "%lu", &input->seed);
+    }
+    else
+    {
+      sscanf(arg, "%lu", &input->num_points);
+    }
 #undef IF_ARG
   }
   
@@ -81,6 +101,15 @@ int main(int argc, char *argv[])
     goto end;
   }
 
+  if (input.num_points == 0)
+  {
+    res = -1;
+    printf("invalid input: num points must be > 0\n");
+    _help();
+    goto end;
+  }
+  
+  print_input(&input, stdout);
 
 end:
   return res;
