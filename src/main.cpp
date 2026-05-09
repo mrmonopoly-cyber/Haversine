@@ -1,4 +1,5 @@
-#include <cstdlib>
+#include <assert.h>
+#include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,8 +11,20 @@
 #include "cli/cli.h"
 #include "haversine.h"
 
-#define FMT_DOUBLE "%.16lf"
+#define FMT_DOUBLE "%24.16lf"
 
+#define JSON_PREFIX(name) "{\"" name "\":["
+#define FMT_PAIRS \
+  "\n{\"x0\":" FMT_DOUBLE", \"y0\":" FMT_DOUBLE ", \"x1\":" FMT_DOUBLE ", \"y1\":" FMT_DOUBLE"},"
+#define FMT_SOL "\n" FMT_DOUBLE","
+#define JSON_SUFFIX "\n]}\n"
+
+struct JsonBuffer{
+  char* data;
+  size_t cap;
+  size_t len;
+};
+  
 struct Point{
   f64 x;
   f64 y;
@@ -65,18 +78,103 @@ bad:
   return res;
 }
 
+static s8 _preallocated_json_buffer(const char* json_prefix, size_t num_ele, size_t ele_size, JsonBuffer* out)
+{
+  static char failed_preallocation;
+  s8 res =0;
+  char* cursor;
+  size_t json_len;
+
+  json_len = 
+    strlen(json_prefix) + 
+    (ele_size* num_ele) +
+    strlen(JSON_SUFFIX);
+
+  out->data = (char*) calloc(1, json_len);
+
+  if (out->data == nullptr) {
+    res = -1;
+    out->data =&failed_preallocation;
+    out->cap= 0;
+    out->len = 0;
+    goto end;
+  }
+
+  out->cap = json_len;
+  cursor = out->data;
+  cursor += snprintf(cursor, &out->data[out->cap-1] - cursor, "%s", json_prefix);
+  out->len = cursor - out->data;
+
+end:
+  return res;
+}
+
+static void _push_point_in_json(JsonBuffer* json, Point* p1, Point* p2)
+{
+  char* cursor = json->data + json->len;
+
+  const u64 max_amount = json->cap - json->len;
+
+  if (max_amount >= json->cap)
+  {
+    printf("cap: %lu, am: %lu\n", json->cap, max_amount);
+    assert(max_amount < json->cap);
+  }
+
+  cursor += snprintf(cursor, max_amount, FMT_PAIRS, p1->x, p1->x, p2->x, p2->y);
+  json->len = cursor - json->data;
+}
+
+static void _push_double(JsonBuffer* json, f64 d)
+{
+  char* cursor = json->data + json->len;
+
+  cursor += snprintf(cursor, &json->data[json->cap-1] - cursor, FMT_SOL, d);
+  json->len = cursor - json->data;
+}
+
+static void _end_json(JsonBuffer* json)
+{
+  char* cursor = json->data + json->len -1;
+
+  cursor += snprintf(cursor, &json->data[json->cap-1] - cursor, JSON_SUFFIX);
+  json->len = cursor - json->data;
+}
+
 int main(int argc, char *argv[])
 {
   s8 res=0;
   Input input;
-  Point points[2];
+  Point p1={}, p2={};
   FILE* o_file = stdout;
   FILE* o_file_sol = stdout;
   f64 acc=0;
   f64 temp;
+  JsonBuffer json_buffer_out;
+  JsonBuffer json_buffer_sol;
+
+  char dummy_pair[128] = {};
+  size_t pair_len=0;
+  size_t double_len=0;
+
+  sprintf(dummy_pair, FMT_PAIRS, p1.x, p1.y, p2.x, p2.y);
+  pair_len = strlen(dummy_pair);
+
+  sprintf(dummy_pair, FMT_SOL, p1.x);
+  double_len = strlen(dummy_pair);
 
   if((res = _parse_args(argc, argv, &input))<0){
     printf("error parsing args: %d\n", res);
+    goto end;
+  }
+
+  if((res=_preallocated_json_buffer(JSON_PREFIX("pairs"), input.num_points, pair_len, &json_buffer_out))<0){
+    printf("failed preallocating memory for json: %d\n", res);
+    goto end;
+  }
+
+  if((res=_preallocated_json_buffer(JSON_PREFIX("solutions"), input.num_points, double_len, &json_buffer_sol))<0){
+    printf("failed preallocating memory for json: %d\n", res);
     goto end;
   }
 
@@ -94,34 +192,29 @@ int main(int argc, char *argv[])
   }
 
 
-  fprintf(o_file,"{\"pairs\":[");
-  fprintf(o_file_sol,"{\"solutions\":[");
   for(size_t i=0; i<input.num_points; i++)
   {
-    _new_point(&points[0], input.num_points);
-    _new_point(&points[1], input.num_points);
-    temp = ReferenceHaversine(points[0].x, points[0].y, points[1].x, points[1].y);
+    _new_point(&p1, input.num_points);
+    _new_point(&p2, input.num_points);
+    temp = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
     acc+=temp;
-
-    if(i!=0){
-      fprintf(o_file,",");
-      fprintf(o_file_sol,",");
-    }
-
-    fprintf(o_file_sol, "\n\t" FMT_DOUBLE, temp);
-
-    fprintf(o_file, "\n\t{\"x0\": " FMT_DOUBLE", \"y0\": " FMT_DOUBLE ", \"x1\": " FMT_DOUBLE ", \"y1\": " FMT_DOUBLE"}",
-        points[0].x, points[0].y, points[1].x, points[1].y);
-
+    _push_point_in_json(&json_buffer_out, &p1, &p2);
+    _push_double(&json_buffer_sol, temp);
   }
-  fprintf(o_file, "\n]}\n");
-  fprintf(o_file_sol, "\n]}\n");
+  _end_json(&json_buffer_out);
+  _end_json(&json_buffer_sol);
+
+
+  fprintf(o_file,"%s", json_buffer_out.data);
+  fprintf(o_file_sol,"%s", json_buffer_sol.data);
 
   fclose(o_file);
   fclose(o_file_sol);
 
-  printf("expected sum: %lf\n", acc);
-  
+  printf("expected sum: " FMT_DOUBLE"\n", acc);
+
 end:
+  if(json_buffer_out.cap >0) free(json_buffer_out.data);
+  if(json_buffer_sol.cap >0) free(json_buffer_sol.data);
   return res;
 }
