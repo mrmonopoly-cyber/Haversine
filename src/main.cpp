@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <cstdlib>
 #include <pthread.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -30,7 +31,6 @@ struct JsonFillerWorkerArg{
   size_t num_points;
   size_t id;
   u64 seed;
-  f64* acc;
 };
 
 
@@ -78,6 +78,10 @@ void* json_filler_worker(void* arg)
   JsonFillerWorkerArg params = *(JsonFillerWorkerArg*)arg;
   Point p1, p2;
   f64 temp;
+  union{
+    f64 data;
+    void* ptr;
+  }acc={0};
 
   printf("worker %ld, %ld -> %ld\n",
       params.id, params.starting_index, params.starting_index + params.num_indexes -1);
@@ -88,7 +92,7 @@ void* json_filler_worker(void* arg)
     _new_point(&p2, params.seed, i, 1, params.num_points);
     temp = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
 
-    // *params.acc+=temp;
+    acc.data+=temp;
 
     if((res=push_entry_at(params.json_buffer_out, i, p1.x, p1.y, p2.x, p2.y))<0){
       printf("failed writing pair at index: %ld\n", i);
@@ -98,7 +102,7 @@ void* json_filler_worker(void* arg)
     }
   }
 
-  return NULL;
+  return acc.ptr;
 }
 
 int main(int argc, char *argv[])
@@ -114,6 +118,13 @@ int main(int argc, char *argv[])
   pthread_t workers[128];
   JsonFillerWorkerArg workers_args[128];
   size_t section_size;
+  f64 res_acc_data = 12;
+  union{
+    void* ptr;
+    f64 data;
+  }res_acc ={
+    &res_acc_data,
+  };
 
   char dummy_pair[128] = {};
   size_t pair_len=0;
@@ -129,6 +140,7 @@ int main(int argc, char *argv[])
     printf("error parsing args: %d\n", res);
     goto end;
   }
+
 
   section_size = input.num_points / input.nproc;
 
@@ -176,7 +188,6 @@ int main(int argc, char *argv[])
       input.num_points,
       proc,
       input.seed,
-      &acc,
     };
     pthread_create(&workers[proc], NULL, json_filler_worker, &workers_args[proc]);
   }
@@ -184,7 +195,8 @@ int main(int argc, char *argv[])
 
   for(size_t proc = 0; proc<input.nproc; proc++)
   {
-    pthread_join(workers[proc], nullptr);
+    pthread_join(workers[proc], &res_acc.ptr);
+    acc += res_acc.data;
   }
 
   end_json(&json_buffer_out);
