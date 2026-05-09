@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+static char invalid_entry = '\0';
+
 s8 preallocated_json_buffer(
     const char* json_prefix,
     const char* fmt,
@@ -48,7 +50,7 @@ end:
   return res;
 }
 
-void push_point_entry(JsonBuffer* json, ...)
+void push_entry(JsonBuffer* json, ...)
 {
   char* cursor = json->data + json->len;
   va_list argptr;
@@ -65,6 +67,33 @@ void push_point_entry(JsonBuffer* json, ...)
   json->len = cursor - json->data;
 }
 
+s8 push_entry_at(JsonBuffer* json, size_t i, ...)
+{
+  s8 res=0;
+  char* cursor = get_entry_json(json, i);
+  va_list argptr;
+
+  if(cursor == &invalid_entry)
+  {
+    res=-1;
+    goto end;
+  }
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wvarargs"
+  va_start(argptr, json->fmt);
+#pragma GCC diagnostic pop
+
+  cursor += vsnprintf(cursor, json->cap - json->len, json->fmt, argptr);
+  va_end(argptr);
+
+  cursor += snprintf(cursor, json->cap - json->len, ",");
+  json->len = cursor - json->data;
+
+end:
+  return res;
+}
+
 void end_json(JsonBuffer* json)
 {
   char* cursor = json->data + json->len -1;
@@ -77,10 +106,9 @@ void end_json(JsonBuffer* json)
 
 char* get_entry_json(JsonBuffer* json, size_t i)
 {
-  static char invalid_entry = '\0';
   char *entry = json->start_entries + ((json->entry_len + 1) * i);
 
-  if(entry < json->data + json->len && entry < json->start_suffix)
+  if(entry < json->data + json->cap && (entry < json->start_suffix || !json->start_suffix))
   {
     return entry;
   }

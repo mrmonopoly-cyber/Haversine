@@ -138,8 +138,8 @@ int main(int argc, char *argv[])
     _new_point(&p2, input.num_points);
     temp = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
     acc+=temp;
-    push_point_entry(&json_buffer_out, &p1, &p2);
-    push_point_entry(&json_buffer_sol, temp);
+    push_entry_at(&json_buffer_out, i, &p1, &p2);
+    push_entry_at(&json_buffer_sol, i, temp);
   }
   end_json(&json_buffer_out);
   end_json(&json_buffer_sol);
@@ -155,7 +155,8 @@ int main(int argc, char *argv[])
 
   printf("expected sum: " FMT_DOUBLE"\n", acc);
 
-  // printf("ele %d, %.*s\n", 5, json_buffer_out.entry_len, get_entry_json(&json_buffer_out, 5));
+  printf("ele out  %d, %.*s\n", 0, json_buffer_out.entry_len, get_entry_json(&json_buffer_out, 0));
+  printf("ele soul %d, %.*s\n", 0, json_buffer_sol.entry_len, get_entry_json(&json_buffer_sol, 0));
 
 end:
   if(json_buffer_out.cap >0) free(json_buffer_out.data);

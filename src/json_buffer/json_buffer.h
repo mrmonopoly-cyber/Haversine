@@ -22,7 +22,8 @@ s8 preallocated_json_buffer(
     size_t ele_size,
     JsonBuffer* out
     );
-void push_point_entry(JsonBuffer* json, ...);
+void push_entry(JsonBuffer* json, ...);
+s8 push_entry_at(JsonBuffer* json, size_t i, ...);
 void end_json(JsonBuffer* json);
 
 char* get_entry_json(JsonBuffer* json, size_t i);
