@@ -12,6 +12,7 @@
 struct Input{
   u64 seed = DEFAULT_SEED;
   u64 num_points = 0;
+  size_t nproc;
   const char* o_file_path = DEFAULT_O_FILE;
 };
 

@@ -11,8 +11,8 @@ struct JsonBuffer{
   char* start_suffix;
   const char* fmt;
   int entry_len;
+  int num_entry;
   size_t cap;
-  size_t len;
 };
 
 s8 preallocated_json_buffer(
@@ -22,8 +22,8 @@ s8 preallocated_json_buffer(
     size_t ele_size,
     JsonBuffer* out
     );
-void push_entry(JsonBuffer* json, ...);
+
 s8 push_entry_at(JsonBuffer* json, size_t i, ...);
 void end_json(JsonBuffer* json);
 
-char* get_entry_json(JsonBuffer* json, size_t i);
+char* get_entry_json(JsonBuffer* json, u64 i);

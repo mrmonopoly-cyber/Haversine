@@ -25,7 +25,7 @@ s8 preallocated_json_buffer(
     ((ele_size + 1)* num_ele) +
     strlen(JSON_SUFFIX);
 
-  out->data = (char*) calloc(1, json_len);
+  out->data = (char*) malloc(json_len);
 
   if (out->data == nullptr) {
     res = -1;
@@ -33,16 +33,14 @@ s8 preallocated_json_buffer(
     out->start_entries = &failed_preallocation;
     out->fmt = "",
     out->cap= 0;
-    out->len = 0;
     out->entry_len = 0;
     goto end;
   }
 
   out->cap = json_len;
   cursor = out->data;
-  cursor += snprintf(cursor, &out->data[out->cap-1] - cursor, "%s", json_prefix);
+  cursor += snprintf(cursor, out->data + out->cap - cursor, "%s", json_prefix);
   out->start_entries = cursor;
-  out->len = cursor - out->data;
   out->entry_len = ele_size;
   out->fmt = fmt;
 
@@ -50,29 +48,11 @@ end:
   return res;
 }
 
-void push_entry(JsonBuffer* json, ...)
-{
-  char* cursor = json->data + json->len;
-  va_list argptr;
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wvarargs"
-  va_start(argptr, json->fmt);
-#pragma GCC diagnostic pop
-
-  cursor += vsnprintf(cursor, json->cap - json->len, json->fmt, argptr);
-  va_end(argptr);
-
-  cursor += snprintf(cursor, json->cap - json->len, ",");
-  json->len = cursor - json->data;
-}
-
 s8 push_entry_at(JsonBuffer* json, size_t i, ...)
 {
   s8 res=0;
   char* cursor = get_entry_json(json, i);
   va_list argptr;
-
   if(cursor == &invalid_entry)
   {
     res=-1;
@@ -82,13 +62,11 @@ s8 push_entry_at(JsonBuffer* json, size_t i, ...)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wvarargs"
   va_start(argptr, json->fmt);
+  vsnprintf(cursor, json->entry_len + 1, json->fmt, argptr);
+  va_end(argptr);
 #pragma GCC diagnostic pop
 
-  cursor += vsnprintf(cursor, json->cap - json->len, json->fmt, argptr);
-  va_end(argptr);
-
-  cursor += snprintf(cursor, json->cap - json->len, ",");
-  json->len = cursor - json->data;
+  *(cursor + json->entry_len) = ',';
 
 end:
   return res;
@@ -96,15 +74,14 @@ end:
 
 void end_json(JsonBuffer* json)
 {
-  char* cursor = json->data + json->len -1;
 
+  char* cursor = json->data + json->cap - strlen(JSON_SUFFIX) - 1;
   json->start_suffix = cursor;
 
   cursor += snprintf(cursor, &json->data[json->cap-1] - cursor, JSON_SUFFIX);
-  json->len = cursor - json->data;
 }
 
-char* get_entry_json(JsonBuffer* json, size_t i)
+char* get_entry_json(JsonBuffer* json, u64 i)
 {
   char *entry = json->start_entries + ((json->entry_len + 1) * i);
 

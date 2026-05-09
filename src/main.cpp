@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <errno.h>
 #include <stdio.h>
@@ -6,10 +7,13 @@
 #include <string.h>
 #include <time.h>
 #include <stdlib.h>
+#include <unistd.h>
+
 #include <haversine_types.h>
 
 #include "cli/cli.h"
 #include "json_buffer/json_buffer.h"
+#include "point/point.h"
 #include "haversine.h"
 
 #define FMT_DOUBLE "%24.16lf"
@@ -18,21 +22,17 @@
   "\n{\"x0\":" FMT_DOUBLE", \"y0\":" FMT_DOUBLE ", \"x1\":" FMT_DOUBLE ", \"y1\":" FMT_DOUBLE"}"
 #define FMT_SOL "\n" FMT_DOUBLE
 
-struct Point{
-  f64 x;
-  f64 y;
+struct JsonFillerWorkerArg{
+  JsonBuffer* json_buffer_out;
+  JsonBuffer* json_buffer_sol;
+  size_t starting_index;
+  size_t num_indexes;
+  size_t num_points;
+  size_t id;
+  u64 seed;
+  f64* acc;
 };
 
-static inline f64 _new_rand_coordinate(f64 max)
-{
-  return ((f64) rand() / (f64)RAND_MAX) * max;
-}
-
-static inline void _new_point(Point* p, f64 max_coordinate)
-{
-  p->x = _new_rand_coordinate(max_coordinate);
-  p->y = _new_rand_coordinate(max_coordinate);
-}
 
 static s8 _create_solution_file(Input* input, FILE** out)
 {
@@ -51,9 +51,10 @@ static s8 _create_solution_file(Input* input, FILE** out)
     printf("error allocating solution path name\n");
     goto bad;
   }
-  cursor = strncat(sol_path_file, sol_prefix, sol_len);
-  strncat(cursor, input->o_file_path, sol_path_file[sol_len] - (size_t) cursor);
-  *out = fopen(sol_path_file, "wa");
+  cursor = sol_path_file;
+  cursor += snprintf(cursor, sol_len, "%s", sol_prefix);
+  snprintf(cursor, &sol_path_file[sol_len] - cursor + 1, "%s", input->o_file_path);
+  *out = fopen(sol_path_file, "w");
   if (*out == nullptr)
   {
     res = -2;
@@ -71,6 +72,35 @@ bad:
   return res;
 }
 
+void* json_filler_worker(void* arg)
+{
+  s8 res;
+  JsonFillerWorkerArg params = *(JsonFillerWorkerArg*)arg;
+  Point p1, p2;
+  f64 temp;
+
+  printf("worker %ld, %ld -> %ld\n",
+      params.id, params.starting_index, params.starting_index + params.num_indexes -1);
+
+  for(size_t i=params.starting_index; i< params.starting_index + params.num_indexes; i++)
+  {
+    _new_point(&p1, params.seed, i, 0, params.num_points);
+    _new_point(&p2, params.seed, i, 1, params.num_points);
+    temp = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
+
+    // *params.acc+=temp;
+
+    if((res=push_entry_at(params.json_buffer_out, i, p1.x, p1.y, p2.x, p2.y))<0){
+      printf("failed writing pair at index: %ld\n", i);
+    }
+    if((res=push_entry_at(params.json_buffer_sol, i, temp))<0){
+      printf("failed writing at solution index: %ld\n", i);
+    }
+  }
+
+  return NULL;
+}
+
 int main(int argc, char *argv[])
 {
   s8 res=0;
@@ -79,9 +109,11 @@ int main(int argc, char *argv[])
   FILE* o_file = stdout;
   FILE* o_file_sol = stdout;
   f64 acc=0;
-  f64 temp;
   JsonBuffer json_buffer_out;
   JsonBuffer json_buffer_sol;
+  pthread_t workers[128];
+  JsonFillerWorkerArg workers_args[128];
+  size_t section_size;
 
   char dummy_pair[128] = {};
   size_t pair_len=0;
@@ -97,6 +129,8 @@ int main(int argc, char *argv[])
     printf("error parsing args: %d\n", res);
     goto end;
   }
+
+  section_size = input.num_points / input.nproc;
 
   if((res=preallocated_json_buffer(
           JSON_PREFIX("pairs"),
@@ -123,7 +157,7 @@ int main(int argc, char *argv[])
     goto end;
   }
 
-  o_file = fopen(input.o_file_path, "wa");
+  o_file = fopen(input.o_file_path, "w");
   if (o_file == nullptr)
   {
     res = -2;
@@ -131,16 +165,28 @@ int main(int argc, char *argv[])
     goto end;
   }
 
-
-  for(size_t i=0; i<input.num_points; i++)
+  for(size_t proc = 0; proc<input.nproc; proc++)
   {
-    _new_point(&p1, input.num_points);
-    _new_point(&p2, input.num_points);
-    temp = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
-    acc+=temp;
-    push_entry_at(&json_buffer_out, i, p1.x, p1.y, p2.x, p2.y);
-    push_entry_at(&json_buffer_sol, i, temp);
+    workers_args[proc] = {
+      &json_buffer_out,
+      &json_buffer_sol,
+      proc * section_size,
+      ((proc!=input.nproc-1) * section_size) +
+        ((proc==input.nproc-1) * (input.num_points - (proc * section_size))),
+      input.num_points,
+      proc,
+      input.seed,
+      &acc,
+    };
+    pthread_create(&workers[proc], NULL, json_filler_worker, &workers_args[proc]);
   }
+
+
+  for(size_t proc = 0; proc<input.nproc; proc++)
+  {
+    pthread_join(workers[proc], nullptr);
+  }
+
   end_json(&json_buffer_out);
   end_json(&json_buffer_sol);
 
@@ -154,9 +200,6 @@ int main(int argc, char *argv[])
   o_file_sol = nullptr;
 
   printf("expected sum: " FMT_DOUBLE"\n", acc);
-
-  printf("ele out  %d, %.*s\n", 0, json_buffer_out.entry_len, get_entry_json(&json_buffer_out, 0));
-  printf("ele soul %d, %.*s\n", 0, json_buffer_sol.entry_len, get_entry_json(&json_buffer_sol, 0));
 
 end:
   if(json_buffer_out.cap >0) free(json_buffer_out.data);
