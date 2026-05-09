@@ -138,7 +138,7 @@ int main(int argc, char *argv[])
     _new_point(&p2, input.num_points);
     temp = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
     acc+=temp;
-    push_entry_at(&json_buffer_out, i, &p1, &p2);
+    push_entry_at(&json_buffer_out, i, p1.x, p1.y, p2.x, p2.y);
     push_entry_at(&json_buffer_sol, i, temp);
   }
   end_json(&json_buffer_out);
