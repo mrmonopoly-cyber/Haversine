@@ -12,6 +12,17 @@
 #include "json_buffer/json_buffer.h"
 #include "haversine.h"
 
+#define FMT_DOUBLE "%24.16lf"
+
+#define FMT_PAIRS \
+  "\n{\"x0\":" FMT_DOUBLE", \"y0\":" FMT_DOUBLE ", \"x1\":" FMT_DOUBLE ", \"y1\":" FMT_DOUBLE"}"
+#define FMT_SOL "\n" FMT_DOUBLE
+
+struct Point{
+  f64 x;
+  f64 y;
+};
+
 static inline f64 _new_rand_coordinate(f64 max)
 {
   return ((f64) rand() / (f64)RAND_MAX) * max;
@@ -99,7 +110,7 @@ int main(int argc, char *argv[])
 
   if((res=preallocated_json_buffer(
           JSON_PREFIX("solutions"),
-          FMT_DOUBLE,
+          FMT_SOL,
           input.num_points,
           double_len,
           &json_buffer_sol))<0){
@@ -127,8 +138,8 @@ int main(int argc, char *argv[])
     _new_point(&p2, input.num_points);
     temp = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
     acc+=temp;
-    push_point_in_json(&json_buffer_out, &p1, &p2);
-    push_double(&json_buffer_sol, temp);
+    push_point_entry(&json_buffer_out, &p1, &p2);
+    push_point_entry(&json_buffer_sol, temp);
   }
   end_json(&json_buffer_out);
   end_json(&json_buffer_sol);
@@ -144,7 +155,7 @@ int main(int argc, char *argv[])
 
   printf("expected sum: " FMT_DOUBLE"\n", acc);
 
-  printf("ele %d, %.*s\n", 5, json_buffer_out.entry_len, get_entry_json(&json_buffer_out, 5));
+  // printf("ele %d, %.*s\n", 5, json_buffer_out.entry_len, get_entry_json(&json_buffer_out, 5));
 
 end:
   if(json_buffer_out.cap >0) free(json_buffer_out.data);

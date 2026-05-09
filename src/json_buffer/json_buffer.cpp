@@ -1,6 +1,7 @@
 #include "json_buffer.h"
 
 #include <assert.h>
+#include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -47,21 +48,20 @@ end:
   return res;
 }
 
-void push_point_in_json(JsonBuffer* json, Point* p1, Point* p2)
+void push_point_entry(JsonBuffer* json, ...)
 {
   char* cursor = json->data + json->len;
+  va_list argptr;
 
-  cursor += snprintf(cursor, json->cap - json->len, json->fmt, p1->x, p1->x, p2->x, p2->y);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wvarargs"
+  va_start(argptr, json->fmt);
+#pragma GCC diagnostic pop
+
+  cursor += vsnprintf(cursor, json->cap - json->len, json->fmt, argptr);
+  va_end(argptr);
+
   cursor += snprintf(cursor, json->cap - json->len, ",");
-  json->len = cursor - json->data;
-}
-
-void push_double(JsonBuffer* json, f64 d)
-{
-  char* cursor = json->data + json->len;
-
-  cursor += snprintf(cursor, &json->data[json->cap-1] - cursor, json->fmt, d);
-  cursor += snprintf(cursor, &json->data[json->cap-1] - cursor, ",");
   json->len = cursor - json->data;
 }
 
