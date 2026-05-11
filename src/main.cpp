@@ -33,6 +33,10 @@ struct JsonFillerWorkerArg{
   u64 seed;
 };
 
+union Ptrf64{
+  f64 _f64;
+  void* ptr;
+};
 
 static s8 _create_solution_file(Input* input, FILE** out)
 {
@@ -72,16 +76,32 @@ bad:
   return res;
 }
 
+struct FmtPairInput{
+  Point* p1;
+  Point* p2;
+};
+
+static int formatter_pair(char* str, size_t str_len, void* data)
+{
+  FmtPairInput* in = (FmtPairInput*) data;
+  return snprintf(str, str_len, FMT_PAIRS, in->p1->x, in->p1->y,  in->p2->x, in->p2->y);
+}
+
+static int formatter_sol(char* str,  size_t str_len, void* data)
+{
+  Ptrf64 in;
+  in.ptr = data;
+
+  return snprintf(str, str_len, FMT_SOL, in._f64);
+}
+
 void* json_filler_worker(void* arg)
 {
-  s8 res;
   JsonFillerWorkerArg params = *(JsonFillerWorkerArg*)arg;
   Point p1, p2;
-  f64 temp;
-  union{
-    f64 data;
-    void* ptr;
-  }acc={0};
+  Ptrf64 temp;
+  Ptrf64 acc;
+  FmtPairInput in_pair;
 
   printf("worker %ld, %ld -> %ld\n",
       params.id, params.starting_index, params.starting_index + params.num_indexes -1);
@@ -90,16 +110,13 @@ void* json_filler_worker(void* arg)
   {
     _new_point(&p1, params.seed, i, 0, params.num_points);
     _new_point(&p2, params.seed, i, 1, params.num_points);
-    temp = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
+    temp._f64 = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
 
-    acc.data+=temp;
-
-    if((res=push_entry_at(params.json_buffer_out, i, p1.x, p1.y, p2.x, p2.y))<0){
-      printf("failed writing pair at index: %ld\n", i);
-    }
-    if((res=push_entry_at(params.json_buffer_sol, i, temp))<0){
-      printf("failed writing at solution index: %ld\n", i);
-    }
+    acc._f64+=temp._f64;
+    in_pair.p1 = &p1;
+    in_pair.p2 = &p2;
+    push_entry_at(params.json_buffer_out, i, &in_pair);
+    push_entry_at(params.json_buffer_sol, i, temp.ptr);
   }
 
   return acc.ptr;
@@ -118,13 +135,7 @@ int main(int argc, char *argv[])
   pthread_t workers[128];
   JsonFillerWorkerArg workers_args[128];
   size_t section_size;
-  f64 res_acc_data = 12;
-  union{
-    void* ptr;
-    f64 data;
-  }res_acc ={
-    &res_acc_data,
-  };
+  Ptrf64 res_acc;
 
   char dummy_pair[128] = {};
   size_t pair_len=0;
@@ -141,25 +152,26 @@ int main(int argc, char *argv[])
     goto end;
   }
 
-
   section_size = input.num_points / input.nproc;
 
   if((res=preallocated_json_buffer(
           JSON_PREFIX("pairs"),
-          FMT_PAIRS,
+          formatter_pair,
           input.num_points,
           pair_len,
-          &json_buffer_out))<0){
+          &json_buffer_out))<0)
+  {
     printf("failed preallocating memory for json: %d\n", res);
     goto end;
   }
 
   if((res=preallocated_json_buffer(
           JSON_PREFIX("solutions"),
-          FMT_SOL,
+          formatter_sol,
           input.num_points,
           double_len,
-          &json_buffer_sol))<0){
+          &json_buffer_sol))<0)
+  {
     printf("failed preallocating memory for json: %d\n", res);
     goto end;
   }
@@ -196,7 +208,7 @@ int main(int argc, char *argv[])
   for(size_t proc = 0; proc<input.nproc; proc++)
   {
     pthread_join(workers[proc], &res_acc.ptr);
-    acc += res_acc.data;
+    acc += res_acc._f64;
   }
 
   end_json(&json_buffer_out);

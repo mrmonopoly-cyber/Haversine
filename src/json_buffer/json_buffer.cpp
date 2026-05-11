@@ -6,11 +6,21 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-static char invalid_entry = '\0';
+char invalid_entry = '\0';
+
+int _dummy_formatter(char* str, size_t str_len, void* data)
+{
+  int res=0;
+  (void)str_len;
+  (void)data;
+  if(str) *str = '\0';
+
+  return res;
+}
 
 s8 preallocated_json_buffer(
     const char* json_prefix,
-    const char* fmt,
+    formatter fmt_f,
     size_t num_ele,
     size_t ele_size,
     JsonBuffer* out)
@@ -26,12 +36,12 @@ s8 preallocated_json_buffer(
     strlen(JSON_SUFFIX);
 
   out->data = (char*) malloc(json_len);
+  out->fmt_f= (fmt_f == nullptr) ? _dummy_formatter : fmt_f;
 
   if (out->data == nullptr) {
     res = -1;
     out->data =&failed_preallocation;
     out->start_entries = &failed_preallocation;
-    out->fmt = "",
     out->cap= 0;
     out->entry_len = 0;
     goto end;
@@ -42,31 +52,24 @@ s8 preallocated_json_buffer(
   cursor += snprintf(cursor, out->data + out->cap - cursor, "%s", json_prefix);
   out->start_entries = cursor;
   out->entry_len = ele_size;
-  out->fmt = fmt;
 
 end:
   return res;
 }
 
-s8 push_entry_at(JsonBuffer* json, size_t i, ...)
+s8 push_entry_at(JsonBuffer* json, size_t i, void* data) 
 {
   s8 res=0;
   char* cursor = get_entry_json(json, i);
-  va_list argptr;
-  if(cursor == &invalid_entry)
+
+  if(cursor == &invalid_entry || data == nullptr)
   {
     res=-1;
     goto end;
   }
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wvarargs"
-  va_start(argptr, json->fmt);
-  vsnprintf(cursor, json->entry_len + 1, json->fmt, argptr);
-  va_end(argptr);
-#pragma GCC diagnostic pop
-
-  *(cursor + json->entry_len) = ',';
+ res = json->fmt_f(cursor, json->entry_len + 1, data);
+ *(cursor + json->entry_len) = ',';
 
 end:
   return res;
