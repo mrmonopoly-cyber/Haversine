@@ -108,7 +108,7 @@ s8 _parse_args(int argc, char** argv, Input* input)
   {
     input->nproc = sysconf(_SC_NPROCESSORS_ONLN);
     if (input->nproc > input->num_points) {
-      input->nproc = input->num_points;
+      input->nproc = input->num_points ? input->num_points : 1;
     }
   }
 

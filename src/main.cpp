@@ -19,9 +19,16 @@
 
 #define FMT_DOUBLE "%24.16lf"
 
+#define ENTRY_NEW_LINE "\n"
+#define PAIR_PREFIX ENTRY_NEW_LINE"{"
+#define PAIR_ELE(l,n) "\""#l""#n"\":"
+#define PAIR_SPACE ", "
+#define PAIR_SUFFIX "}"
+
 #define FMT_PAIRS \
-  "\n{\"x0\":" FMT_DOUBLE", \"y0\":" FMT_DOUBLE ", \"x1\":" FMT_DOUBLE ", \"y1\":" FMT_DOUBLE"}"
-#define FMT_SOL "\n" FMT_DOUBLE
+  PAIR_PREFIX PAIR_ELE(x,0)FMT_DOUBLE PAIR_SPACE PAIR_ELE(y,0)FMT_DOUBLE PAIR_SPACE PAIR_ELE(x,1)FMT_DOUBLE PAIR_SPACE PAIR_ELE(y,1)FMT_DOUBLE PAIR_SUFFIX
+
+#define FMT_SOL ENTRY_NEW_LINE FMT_DOUBLE
 
 struct JsonFillerWorkerArg{
   JsonBuffer* json_buffer_out;
@@ -81,19 +88,69 @@ struct FmtPairInput{
   Point* p2;
 };
 
+#define TRY_COPY(STR)                             \
+  do{                                             \
+    size_t len = sizeof(STR) -1;                  \
+    if(len < str_len - (cur - STR)){              \
+      memcpy(cur, STR, len);                      \
+      cur+=len;                                   \
+    }else{                                        \
+      res=-1;                                     \
+      goto bad;                                   \
+    }                                             \
+  }while(0)
+
 static int formatter_pair(char* str, size_t str_len, void* data)
 {
   FmtPairInput* in = (FmtPairInput*) data;
-  return snprintf(str, str_len, FMT_PAIRS, in->p1->x, in->p1->y,  in->p2->x, in->p2->y);
+  int res=0;
+  char *cur = str;
+
+  TRY_COPY(PAIR_PREFIX);
+
+  TRY_COPY(PAIR_ELE(x, 0));
+  cur+=snprintf(cur, str_len - (cur - str), FMT_DOUBLE, in->p1->x);
+  TRY_COPY(PAIR_SPACE);
+  TRY_COPY(PAIR_ELE(y, 0));
+  cur+=snprintf(cur, str_len - (cur - str), FMT_DOUBLE, in->p1->y);
+
+  TRY_COPY(PAIR_SPACE);
+
+  TRY_COPY(PAIR_ELE(x, 1));
+  cur+=snprintf(cur, str_len - (cur - str), FMT_DOUBLE, in->p1->x);
+  TRY_COPY(PAIR_SPACE);
+  TRY_COPY(PAIR_ELE(y, 1));
+  cur+=snprintf(cur, str_len - (cur - str), FMT_DOUBLE, in->p1->y);
+
+  TRY_COPY(PAIR_SUFFIX);
+
+  res = cur - str;
+  return res;
+
+bad:
+  res=-1;
+  return res;
 }
 
 static int formatter_sol(char* str,  size_t str_len, void* data)
 {
   Ptrf64 in;
+  int res=0;
+  char *cur = str;
+
   in.ptr = data;
 
-  return snprintf(str, str_len, FMT_SOL, in._f64);
+  TRY_COPY(ENTRY_NEW_LINE);
+  cur+=snprintf(cur, str_len - (cur - str), FMT_DOUBLE, in._f64);
+
+  res = cur - str;
+  return res;
+
+bad:
+  res=-1;
+  return res;
 }
+#undef TRY_COPY
 
 void* json_filler_worker(void* arg)
 {
