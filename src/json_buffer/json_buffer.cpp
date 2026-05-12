@@ -8,7 +8,7 @@
 
 char invalid_entry = '\0';
 
-int _dummy_formatter(char* str, size_t str_len, void* data)
+int _dummy_formatter(char* str, size_t str_len, const void* data)
 {
   int res=0;
   (void)str_len;
@@ -72,7 +72,10 @@ s8 push_entry_at(JsonBuffer* json, size_t i, void* data)
 
   while(res<json->entry_len) cursor[res++] = ' ';
 
-  if(res > json->entry_len) res = json->entry_len;
+  if(res > json->entry_len){
+    res = -1;
+    goto end;
+  };
 
   cursor[json->entry_len] = ',';
   res++;

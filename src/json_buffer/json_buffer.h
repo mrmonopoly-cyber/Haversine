@@ -6,7 +6,7 @@
 #define JSON_PREFIX(name) "{\"" name "\":["
 #define JSON_SUFFIX "\n]}\n"
 
-typedef int (*formatter)(char*, size_t str_len, void* data);
+typedef int (*formatter)(char*, size_t str_len, const void* data);
 
 struct JsonBuffer{
   char* data;

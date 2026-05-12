@@ -38,7 +38,7 @@ static char* _next_argv(int argc=0, char** argv=nullptr)
 
 static inline void print_input(Input* input)
 {
-  printf("seed: %ld\n", input->seed);
+  printf("seed: %zu\n", input->seed);
   printf("num points: %lu\n", input->num_points);
   switch (input->rand_mode)
   {
@@ -97,7 +97,7 @@ s8 _parse_args(int argc, char** argv, Input* input)
       arg = _next_argv();
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wformat"
-      sscanf(arg, "%ld", &input->seed);
+      sscanf(arg, "%lu", &input->seed);
 #pragma GCC diagnostic pop
     }
     IF_ARG(-o)
@@ -142,8 +142,6 @@ s8 _parse_args(int argc, char** argv, Input* input)
   {
     input->seed = (u64) time(nullptr);
   }
-
-  srand(input->seed);
 
   print_input(input);
 

@@ -1,6 +1,4 @@
 #include <assert.h>
-#include <math.h>
-#include <stdlib.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -107,34 +105,39 @@ struct FmtPairInput{
     }                                             \
   }while(0)
 
+#define TRY_D2_FIXED(DATA)                                          \
+  do{                                                               \
+    written =d2fixed_buffered_n((DATA), FMT_DOUBLE_PRECISION, cur); \
+    if(cur - str + written > str_len){                              \
+      res=-1;                                                       \
+      goto bad;                                                     \
+    }                                                               \
+    cur+=written;                                                   \
+  }while(0);
 
-static int formatter_pair(char* str, size_t str_len, void* data)
+static int formatter_pair(char* str, size_t str_len, const void* data)
 {
-  FmtPairInput* in = (FmtPairInput*) data;
+  const FmtPairInput* in = (const FmtPairInput*) data;
   int res=0;
   char *cur = str;
-  int written;
+  size_t written;
 
 
   TRY_COPY(PAIR_PREFIX);
 
   TRY_COPY(PAIR_ELE(x, 0));
-  written =d2fixed_buffered_n(in->p1->x, FMT_DOUBLE_PRECISION, cur);
-  cur+=written;
+  TRY_D2_FIXED(in->p1->x);
   TRY_COPY(PAIR_SPACE);
   TRY_COPY(PAIR_ELE(y, 0));
-  written=d2fixed_buffered_n(in->p1->y, FMT_DOUBLE_PRECISION, cur);
-  cur+=written;
+  TRY_D2_FIXED(in->p1->y);
 
   TRY_COPY(PAIR_SPACE);
 
   TRY_COPY(PAIR_ELE(x, 1));
-  written=d2fixed_buffered_n(in->p2->x, FMT_DOUBLE_PRECISION, cur);
-  cur+=written;
+  TRY_D2_FIXED(in->p2->x);
   TRY_COPY(PAIR_SPACE);
   TRY_COPY(PAIR_ELE(y, 1));
-  written=d2fixed_buffered_n(in->p2->y, FMT_DOUBLE_PRECISION, cur);
-  cur+=written;
+  TRY_D2_FIXED(in->p2->y);
 
   TRY_COPY(PAIR_SUFFIX);
 
@@ -146,16 +149,15 @@ bad:
   return res;
 }
 
-static int formatter_sol(char* str,  size_t str_len, void* data)
+static int formatter_sol(char* str,  size_t str_len, const void* data)
 {
-  f64 in = *(f64*) data;
+  const f64 in = *(const f64*) data;
   int res=0;
   char *cur = str;
-  int written;
+  size_t written;
 
   TRY_COPY(ENTRY_NEW_LINE);
-  written=d2fixed_buffered_n(in, FMT_DOUBLE_PRECISION, cur);
-  cur+=written;
+  TRY_D2_FIXED(in);
 
   res = cur - str;
   return res;
@@ -164,7 +166,9 @@ bad:
   res=-1;
   return res;
 }
+
 #undef TRY_COPY
+#undef TRY_D2_FIXED
 
 void* json_filler_worker(void* arg)
 {
@@ -174,7 +178,7 @@ void* json_filler_worker(void* arg)
   f64 sum = 0.0;
   FmtPairInput in_pair;
 
-  printf("worker %ld, %ld -> %ld\n",
+  printf("worker %zu, %zu -> %zu\n",
       params->id, params->starting_index, params->starting_index + params->num_indexes -1);
 
   for(size_t i=params->starting_index; i< params->starting_index + params->num_indexes; i++)
@@ -227,7 +231,7 @@ int main(int argc, char *argv[])
   }
 
   if (input.nproc > sizeof(workers)/sizeof(workers[0])) {
-    printf("reached max num of workers: %ld, capping it to %ld\n",
+    printf("reached max num of workers: %zu, capping it to %zu\n",
         input.nproc, sizeof(workers)/sizeof(workers[0]));
     input.nproc = sizeof(workers)/sizeof(workers[0]);
   }
@@ -284,7 +288,11 @@ int main(int argc, char *argv[])
 
       0.0,
     };
-    pthread_create(&workers[proc], NULL, json_filler_worker, &workers_args[proc]);
+    if((res=pthread_create(&workers[proc], NULL, json_filler_worker, &workers_args[proc]))){
+      printf("%s.%d: error creating workers : %s", __FILE__, __LINE__, strerror(res));
+      res =-3;
+      goto end;
+    }
   }
 
 
