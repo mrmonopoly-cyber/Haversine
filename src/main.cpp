@@ -1,5 +1,6 @@
 #include <assert.h>
-#include <cstdlib>
+#include <math.h>
+#include <stdlib.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -16,6 +17,8 @@
 #include "json_buffer/json_buffer.h"
 #include "point/point.h"
 #include "haversine.h"
+
+#include <ryu/ryu.h>
 
 #define FMT_DOUBLE "%24.16lf"
 
@@ -50,7 +53,7 @@ static s8 _create_solution_file(Input* input, FILE** out)
   s8 res=0;
   const char sol_prefix[] = "solution_";
   char* sol_path_file = nullptr;
-  char* cursor;
+  char* cur;
   size_t sol_len = 0;
 
   sol_len = strlen(input->o_file_path) + strlen(sol_prefix);
@@ -62,9 +65,9 @@ static s8 _create_solution_file(Input* input, FILE** out)
     printf("error allocating solution path name\n");
     goto bad;
   }
-  cursor = sol_path_file;
-  cursor += snprintf(cursor, sol_len, "%s", sol_prefix);
-  snprintf(cursor, &sol_path_file[sol_len] - cursor + 1, "%s", input->o_file_path);
+  cur = sol_path_file;
+  cur += snprintf(cur, sol_len, "%s", sol_prefix);
+  snprintf(cur, &sol_path_file[sol_len] - cur + 1, "%s", input->o_file_path);
   *out = fopen(sol_path_file, "w");
   if (*out == nullptr)
   {
@@ -100,27 +103,34 @@ struct FmtPairInput{
     }                                             \
   }while(0)
 
+
 static int formatter_pair(char* str, size_t str_len, void* data)
 {
   FmtPairInput* in = (FmtPairInput*) data;
   int res=0;
   char *cur = str;
+  int written;
+
 
   TRY_COPY(PAIR_PREFIX);
 
   TRY_COPY(PAIR_ELE(x, 0));
-  cur+=snprintf(cur, str_len - (cur - str), FMT_DOUBLE, in->p1->x);
+  written =d2fixed_buffered_n(in->p1->x, 16, cur);
+  cur+=written;
   TRY_COPY(PAIR_SPACE);
   TRY_COPY(PAIR_ELE(y, 0));
-  cur+=snprintf(cur, str_len - (cur - str), FMT_DOUBLE, in->p1->y);
+  written=d2fixed_buffered_n(in->p1->y, 16, cur);
+  cur+=written;
 
   TRY_COPY(PAIR_SPACE);
 
   TRY_COPY(PAIR_ELE(x, 1));
-  cur+=snprintf(cur, str_len - (cur - str), FMT_DOUBLE, in->p1->x);
+  written=d2fixed_buffered_n(in->p2->x, 16, cur);
+  cur+=written;
   TRY_COPY(PAIR_SPACE);
   TRY_COPY(PAIR_ELE(y, 1));
-  cur+=snprintf(cur, str_len - (cur - str), FMT_DOUBLE, in->p1->y);
+  written=d2fixed_buffered_n(in->p2->y, 16, cur);
+  cur+=written;
 
   TRY_COPY(PAIR_SUFFIX);
 
@@ -137,11 +147,13 @@ static int formatter_sol(char* str,  size_t str_len, void* data)
   Ptrf64 in;
   int res=0;
   char *cur = str;
+  int written;
 
   in.ptr = data;
 
   TRY_COPY(ENTRY_NEW_LINE);
-  cur+=snprintf(cur, str_len - (cur - str), FMT_DOUBLE, in._f64);
+  written=d2fixed_buffered_n(in._f64, 16, cur);
+  cur+=written;
 
   res = cur - str;
   return res;

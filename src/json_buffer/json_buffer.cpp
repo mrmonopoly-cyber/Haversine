@@ -69,7 +69,10 @@ s8 push_entry_at(JsonBuffer* json, size_t i, void* data)
   }
 
  res = json->fmt_f(cursor, json->entry_len + 1, data);
- *(cursor + json->entry_len) = ',';
+
+ while(res<json->entry_len) cursor[res++] = ' ';
+
+ cursor[res++] = ',';
 
 end:
   return res;
@@ -81,7 +84,7 @@ void end_json(JsonBuffer* json)
   char* cursor = json->data + json->cap - strlen(JSON_SUFFIX) - 1;
   json->start_suffix = cursor;
 
-  cursor += snprintf(cursor, &json->data[json->cap-1] - cursor, JSON_SUFFIX);
+  cursor += snprintf(cursor, &json->data[json->cap-1] - cursor + 1, JSON_SUFFIX);
 }
 
 char* get_entry_json(JsonBuffer* json, u64 i)

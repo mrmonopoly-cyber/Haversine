@@ -7,6 +7,10 @@ extern "C"
 #include "nob.h"
 }
 
+#ifndef LIB_DIR
+#define LIB_DIR "lib"
+#endif // !LIB_DIR
+
 #ifndef BUILD_DIR
 #define BUILD_DIR "build"
 #endif // !BUILD_DIR
@@ -28,12 +32,14 @@ extern "C"
   X(-std=c++17)\
   X(-fsanitize=address)\
   X(-I../src/haversine_defs)\
+  X(-I../lib/ryu/build/include/)\
 
 #define LINKER_ARGS \
   X(-Wall)\
   X(-Wextra)\
   X(-fsanitize=address)\
 
+// X(-L../lib/ryu/lib/libryu.a)
 
 #define O_FILE "main"
 
@@ -82,8 +88,40 @@ int main(int argc, char **argv)
   nob_log(INFO, "src dir: %s", src_dir);
   nob_log(INFO, "build dir: %s", build_dir);
 
-  mkdir_if_not_exists(BUILD_DIR);
+  //external libs
+  if(!file_exists(LIB_DIR)) mkdir_if_not_exists(LIB_DIR);
+  set_current_dir(LIB_DIR);
+  if(!file_exists("ryu"))
+  {
+    cmd_append(&cmd, "git", "clone", "https://github.com/ulfjack/ryu.git");
+    if (!cmd_run(&cmd)) return 1;
+  }
+
+  set_current_dir("ryu");
+  if(!file_exists(BUILD_DIR)) mkdir_if_not_exists(BUILD_DIR);
   set_current_dir(BUILD_DIR);
+  cmd_append(&cmd, "cmake", "..");
+  if (!cmd_run(&cmd)) return 1;
+
+  cmd_append(&cmd, "sed", "-i", "s/\\/usr\\/local/./", "CMakeCache.txt");
+  if (!cmd_run(&cmd)) return 1;
+
+  cmd_append(&cmd, "make");
+  if (!cmd_run(&cmd)) return 1;
+
+  cmd_append(&cmd, "make", "install");
+  if (!cmd_run(&cmd)) return 1;
+  
+  set_current_dir(pwd);
+
+  //build 
+  if(!file_exists(BUILD_DIR)) mkdir_if_not_exists(BUILD_DIR);
+  set_current_dir(BUILD_DIR);
+
+  if(!copy_file("../lib/ryu/build/lib/libryu.a", "libryu.a")){
+    printf("failed copy file lib/ryu/lib/libryu.a\n");
+    return 1;
+  }
 
   nob_log(INFO, "current dir: %s", get_current_dir_temp());
   
@@ -109,7 +147,8 @@ int main(int argc, char **argv)
     if(
         strncmp(dir.name, "..", 2) &&
         strncmp(dir.name, ".", 1) &&
-        !strncmp(dir.name + len - 2, ".o", 2))
+        (!strncmp(dir.name + len - 2, ".o", 2) || !strncmp(dir.name + len - 2, ".a", 2))
+      )
     {
       cmd_append(&cmd, dir.name);
     }
