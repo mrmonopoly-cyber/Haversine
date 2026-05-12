@@ -20,9 +20,8 @@
 
 #include <ryu/ryu.h>
 
-#define MAX_JSON_DOUBLE ((f64) (9999999.9999999999999999))
-
-#define FMT_DOUBLE "%24.16lf"
+#define FMT_DOUBLE_PRECISION 16
+#define FMT_DOUBLE "%21.16lf"
 
 #define ENTRY_NEW_LINE "\n"
 #define PAIR_PREFIX ENTRY_NEW_LINE"{"
@@ -44,6 +43,8 @@ struct JsonFillerWorkerArg{
   size_t id;
   u64 seed;
   RandMode mode;
+
+  f64 o_partial_sum;
 };
 
 union Ptrf64{
@@ -97,7 +98,7 @@ struct FmtPairInput{
 #define TRY_COPY(STR)                             \
   do{                                             \
     size_t len = sizeof(STR) -1;                  \
-    if(len < str_len - (cur - STR)){              \
+    if(len <= str_len - (size_t)(cur - str)){     \
       memcpy(cur, STR, len);                      \
       cur+=len;                                   \
     }else{                                        \
@@ -118,21 +119,21 @@ static int formatter_pair(char* str, size_t str_len, void* data)
   TRY_COPY(PAIR_PREFIX);
 
   TRY_COPY(PAIR_ELE(x, 0));
-  written =d2fixed_buffered_n(in->p1->x, 16, cur);
+  written =d2fixed_buffered_n(in->p1->x, FMT_DOUBLE_PRECISION, cur);
   cur+=written;
   TRY_COPY(PAIR_SPACE);
   TRY_COPY(PAIR_ELE(y, 0));
-  written=d2fixed_buffered_n(in->p1->y, 16, cur);
+  written=d2fixed_buffered_n(in->p1->y, FMT_DOUBLE_PRECISION, cur);
   cur+=written;
 
   TRY_COPY(PAIR_SPACE);
 
   TRY_COPY(PAIR_ELE(x, 1));
-  written=d2fixed_buffered_n(in->p2->x, 16, cur);
+  written=d2fixed_buffered_n(in->p2->x, FMT_DOUBLE_PRECISION, cur);
   cur+=written;
   TRY_COPY(PAIR_SPACE);
   TRY_COPY(PAIR_ELE(y, 1));
-  written=d2fixed_buffered_n(in->p2->y, 16, cur);
+  written=d2fixed_buffered_n(in->p2->y, FMT_DOUBLE_PRECISION, cur);
   cur+=written;
 
   TRY_COPY(PAIR_SUFFIX);
@@ -147,15 +148,13 @@ bad:
 
 static int formatter_sol(char* str,  size_t str_len, void* data)
 {
-  Ptrf64 in;
+  f64 in = *(f64*) data;
   int res=0;
   char *cur = str;
   int written;
 
-  in.ptr = data;
-
   TRY_COPY(ENTRY_NEW_LINE);
-  written=d2fixed_buffered_n(in._f64, 16, cur);
+  written=d2fixed_buffered_n(in, FMT_DOUBLE_PRECISION, cur);
   cur+=written;
 
   res = cur - str;
@@ -169,30 +168,33 @@ bad:
 
 void* json_filler_worker(void* arg)
 {
-  JsonFillerWorkerArg params = *(JsonFillerWorkerArg*)arg;
+  JsonFillerWorkerArg* params = (JsonFillerWorkerArg*)arg;
   Point p1, p2;
-  Ptrf64 temp;
-  Ptrf64 acc;
+  f64 temp = 0.0;
+  f64 sum = 0.0;
   FmtPairInput in_pair;
 
   printf("worker %ld, %ld -> %ld\n",
-      params.id, params.starting_index, params.starting_index + params.num_indexes -1);
+      params->id, params->starting_index, params->starting_index + params->num_indexes -1);
 
-  for(size_t i=params.starting_index; i< params.starting_index + params.num_indexes; i++)
+  for(size_t i=params->starting_index; i< params->starting_index + params->num_indexes; i++)
   {
-    _new_point(&p1, params.seed, i, 0, MAX_JSON_DOUBLE, params.mode);
-    _new_point(&p2, params.seed, i, 1, MAX_JSON_DOUBLE, params.mode);
+    _new_point(&p1, params->seed, i, 0, params->mode);
+    _new_point(&p2, params->seed, i, 1, params->mode);
 
-    temp._f64 = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
+    temp = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
     in_pair.p1 = &p1;
     in_pair.p2 = &p2;
 
-    acc._f64+=temp._f64;
-    push_entry_at(params.json_buffer_out, i, &in_pair);
-    push_entry_at(params.json_buffer_sol, i, temp.ptr);
+    push_entry_at(params->json_buffer_out, i, &in_pair);
+    push_entry_at(params->json_buffer_sol, i, &temp);
+
+    sum+=temp;
   }
 
-  return acc.ptr;
+  params->o_partial_sum=sum;
+
+  return nullptr;
 }
 
 int main(int argc, char *argv[])
@@ -208,21 +210,26 @@ int main(int argc, char *argv[])
   pthread_t workers[128];
   JsonFillerWorkerArg workers_args[128];
   size_t section_size;
-  Ptrf64 res_acc;
 
   char dummy_pair[128] = {};
   size_t pair_len=0;
   size_t double_len=0;
 
-  sprintf(dummy_pair, FMT_PAIRS, p1.x, p1.y, p2.x, p2.y);
+  snprintf(dummy_pair, sizeof(dummy_pair), FMT_PAIRS, p1.x, p1.y, p2.x, p2.y);
   pair_len = strlen(dummy_pair);
 
-  sprintf(dummy_pair, FMT_SOL, p1.x);
+  snprintf(dummy_pair, sizeof(dummy_pair), FMT_SOL, p1.x);
   double_len = strlen(dummy_pair);
 
   if((res = _parse_args(argc, argv, &input))<0){
     printf("error parsing args: %d\n", res);
     goto end;
+  }
+
+  if (input.nproc > sizeof(workers)/sizeof(workers[0])) {
+    printf("reached max num of workers: %ld, capping it to %ld\n",
+        input.nproc, sizeof(workers)/sizeof(workers[0]));
+    input.nproc = sizeof(workers)/sizeof(workers[0]);
   }
 
   section_size = input.num_points / input.nproc;
@@ -274,6 +281,8 @@ int main(int argc, char *argv[])
       proc,
       input.seed,
       input.rand_mode,
+
+      0.0,
     };
     pthread_create(&workers[proc], NULL, json_filler_worker, &workers_args[proc]);
   }
@@ -281,8 +290,8 @@ int main(int argc, char *argv[])
 
   for(size_t proc = 0; proc<input.nproc; proc++)
   {
-    pthread_join(workers[proc], &res_acc.ptr);
-    acc += res_acc._f64;
+    pthread_join(workers[proc], nullptr);
+    acc += workers_args[proc].o_partial_sum;
   }
 
   end_json(&json_buffer_out);
