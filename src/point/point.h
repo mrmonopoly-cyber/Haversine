@@ -1,8 +1,14 @@
 #pragma once
 
+#include <stdio.h>
 #include <stdint.h>
 
 #include <haversine_types.h>
+
+enum RandMode{
+  Uniform,
+  Cluster,
+};
 
 struct Point{
   f64 x;
@@ -30,8 +36,15 @@ static inline f64 _deterministic_rand(
     return ((f64)v / (f64)UINT64_MAX) * max;
 }
 
-static inline void _new_point(Point* p, u64 seed, u64 i, u64 comp, f64 max_coordinate)
+static inline void _new_point(Point* p, u64 seed, u64 i, u64 comp, f64 max_coordinate, RandMode mode)
 {
-  p->x = _deterministic_rand(seed, i, 1<<comp, max_coordinate);
-  p->y = _deterministic_rand(seed, i, 1<<(comp+1), max_coordinate);
+  switch (mode) {
+    case Uniform:
+      p->x = _deterministic_rand(seed, i, 1<<comp, max_coordinate);
+      p->y = _deterministic_rand(seed, i, 1<<(comp+1), max_coordinate);
+      break;
+    case Cluster:
+      perror("non implemented");
+      break;
+  }
 }

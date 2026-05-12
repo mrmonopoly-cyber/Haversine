@@ -8,6 +8,8 @@
 
 #include <string_view>
 
+#define STRINGIFY(X) #X
+
 static char* _next_argv(int argc=0, char** argv=nullptr)
 {
   static int num_elements = 0;
@@ -38,6 +40,15 @@ static inline void print_input(Input* input)
 {
   printf("seed: %ld\n", input->seed);
   printf("num points: %lu\n", input->num_points);
+  switch (input->rand_mode)
+  {
+    case Uniform:
+      printf("rand mode : %s\n", STRINGIFY(Uniform));
+      break;
+    case Cluster:
+      printf("rand mode : %s\n", STRINGIFY(Cluster));
+      break;
+  }
   printf("nproc : %lu\n", input->nproc);
   printf("out file: ");
   if(input->o_file_path)
@@ -57,6 +68,7 @@ static inline void _help(void)
   printf(TAB_ALIGN_1"-h" TAB_ALIGN_3"print help\n");
   printf(TAB_ALIGN_1"-s [seed]" TAB_ALIGN_2"specify the seed (default is 0)\n");
   printf(TAB_ALIGN_1"-o [path]" TAB_ALIGN_2"specify the output file (" DEFAULT_O_FILE ")\n");
+  printf(TAB_ALIGN_1"-r [%s/%s]" TAB_ALIGN_1"specify the distribution pattern to use\n", STRINGIFY(Uniform), STRINGIFY(Cluster));
   printf(TAB_ALIGN_1"-j [nproc]" TAB_ALIGN_2"specify of threads (default all of the cores)\n");
 }
 
@@ -96,6 +108,20 @@ s8 _parse_args(int argc, char** argv, Input* input)
     {
       arg = _next_argv();
       sscanf(arg, "%lu", &input->nproc);
+    }
+    IF_ARG(-r)
+    {
+      sw = _next_argv();
+      if(!sw.compare(STRINGIFY(Uniform))){
+        input->rand_mode = Uniform;
+      }else if(!sw.compare(STRINGIFY(Cluster)))
+      {
+        input->rand_mode = Cluster;
+      }else{
+        input->rand_mode = Uniform;
+        printf("invalid rand mode: %s, expected %s or %s using %s as fallback\n",
+            sw.begin(), STRINGIFY(Uniform), STRINGIFY(Cluster), STRINGIFY(Uniform));
+      }
     }
     else
     {

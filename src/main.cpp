@@ -41,6 +41,7 @@ struct JsonFillerWorkerArg{
   size_t num_points;
   size_t id;
   u64 seed;
+  RandMode mode;
 };
 
 union Ptrf64{
@@ -177,8 +178,8 @@ void* json_filler_worker(void* arg)
 
   for(size_t i=params.starting_index; i< params.starting_index + params.num_indexes; i++)
   {
-    _new_point(&p1, params.seed, i, 0, params.num_points);
-    _new_point(&p2, params.seed, i, 1, params.num_points);
+    _new_point(&p1, params.seed, i, 0, params.num_points, params.mode);
+    _new_point(&p2, params.seed, i, 1, params.num_points, params.mode);
     temp._f64 = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
 
     acc._f64+=temp._f64;
@@ -269,6 +270,7 @@ int main(int argc, char *argv[])
       input.num_points,
       proc,
       input.seed,
+      input.rand_mode,
     };
     pthread_create(&workers[proc], NULL, json_filler_worker, &workers_args[proc]);
   }
