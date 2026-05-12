@@ -20,6 +20,8 @@
 
 #include <ryu/ryu.h>
 
+#define MAX_JSON_DOUBLE ((f64) (9999999.9999999999999999))
+
 #define FMT_DOUBLE "%24.16lf"
 
 #define ENTRY_NEW_LINE "\n"
@@ -178,13 +180,14 @@ void* json_filler_worker(void* arg)
 
   for(size_t i=params.starting_index; i< params.starting_index + params.num_indexes; i++)
   {
-    _new_point(&p1, params.seed, i, 0, params.num_points, params.mode);
-    _new_point(&p2, params.seed, i, 1, params.num_points, params.mode);
-    temp._f64 = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
+    _new_point(&p1, params.seed, i, 0, MAX_JSON_DOUBLE, params.mode);
+    _new_point(&p2, params.seed, i, 1, MAX_JSON_DOUBLE, params.mode);
 
-    acc._f64+=temp._f64;
+    temp._f64 = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
     in_pair.p1 = &p1;
     in_pair.p2 = &p2;
+
+    acc._f64+=temp._f64;
     push_entry_at(params.json_buffer_out, i, &in_pair);
     push_entry_at(params.json_buffer_sol, i, temp.ptr);
   }

@@ -13,7 +13,7 @@ struct JsonBuffer{
   char* start_entries;
   char* start_suffix;
   formatter fmt_f;
-  int entry_len;
+  size_t entry_len;
   int num_entry;
   size_t cap;
 };

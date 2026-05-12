@@ -59,7 +59,7 @@ end:
 
 s8 push_entry_at(JsonBuffer* json, size_t i, void* data) 
 {
-  s8 res=0;
+  size_t res=0;
   char* cursor = get_entry_json(json, i);
 
   if(cursor == &invalid_entry || data == nullptr)
@@ -68,11 +68,14 @@ s8 push_entry_at(JsonBuffer* json, size_t i, void* data)
     goto end;
   }
 
- res = json->fmt_f(cursor, json->entry_len + 1, data);
+  res = json->fmt_f(cursor, json->entry_len + 1, data);
 
- while(res<json->entry_len) cursor[res++] = ' ';
+  while(res<json->entry_len) cursor[res++] = ' ';
 
- cursor[res++] = ',';
+  if(res > json->entry_len) res = json->entry_len;
+
+  cursor[json->entry_len] = ',';
+  res++;
 
 end:
   return res;
