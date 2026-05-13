@@ -1,5 +1,6 @@
 #include "cli.h"
 
+#include <assert.h>
 #include <stdlib.h>
 #include <time.h>
 #include <stdio.h>
@@ -40,16 +41,22 @@ static inline void print_input(Input* input)
 {
   printf("seed: %zu\n", input->seed);
   printf("num points: %lu\n", input->num_points);
-  switch (input->rand_mode)
+  if (input->num_clusters == 1)
   {
-    case Uniform:
-      printf("rand mode : %s\n", STRINGIFY(Uniform));
-      break;
-    case Cluster:
-      printf("rand mode : %s\n", STRINGIFY(Cluster));
-      break;
+    printf("rand mode : %s\n", STRINGIFY(Uniform));
+  }
+  else if(input->num_clusters > 0)
+  {
+    printf("rand mode : %s\n", STRINGIFY(Cluster));
+  }
+  else
+  {
+    printf("DEBUG: num_clusters: %zu\n", input->num_clusters);
+    assert(0 && "unreachable");
   }
   printf("nproc : %lu\n", input->nproc);
+  printf("verbose: %s\n", input->verbose ? "true": "false");
+
   printf("out file: ");
   if(input->o_file_path)
   {
@@ -70,6 +77,7 @@ static inline void _help(void)
   printf(TAB_ALIGN_1"-o [path]" TAB_ALIGN_2"specify the output file (" DEFAULT_O_FILE ")\n");
   printf(TAB_ALIGN_1"-r [%s/%s]" TAB_ALIGN_1"specify the distribution pattern to use\n", STRINGIFY(Uniform), STRINGIFY(Cluster));
   printf(TAB_ALIGN_1"-j [nproc]" TAB_ALIGN_2"specify of threads (default all of the cores)\n");
+  printf(TAB_ALIGN_1"-v" TAB_ALIGN_3"verbose\n");
 }
 
 s8 _parse_args(int argc, char** argv, Input* input)
@@ -86,8 +94,8 @@ s8 _parse_args(int argc, char** argv, Input* input)
   {
     sw = arg;
 
-#define IF_ARG(STR) if(!sw.compare(#STR))
-    IF_ARG(-h)
+#define IF_ARG(STR) else if(!sw.compare(#STR))
+    if(!sw.compare("-h"))
     {
       _help();
       exit(0);
@@ -95,10 +103,7 @@ s8 _parse_args(int argc, char** argv, Input* input)
     IF_ARG(-s)
     {
       arg = _next_argv();
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat"
       sscanf(arg, "%lu", &input->seed);
-#pragma GCC diagnostic pop
     }
     IF_ARG(-o)
     {
@@ -112,16 +117,24 @@ s8 _parse_args(int argc, char** argv, Input* input)
     IF_ARG(-r)
     {
       sw = _next_argv();
-      if(!sw.compare(STRINGIFY(Uniform))){
-        input->rand_mode = Uniform;
-      }else if(!sw.compare(STRINGIFY(Cluster)))
+      if(!sw.compare(STRINGIFY(Uniform)))
       {
-        input->rand_mode = Cluster;
-      }else{
-        input->rand_mode = Uniform;
+        input->num_clusters = Uniform;
+      }
+      else if(!sw.compare(STRINGIFY(Cluster)))
+      {
+        input->num_clusters = Cluster;
+      }
+      else
+      {
+        input->num_clusters = Uniform;
         printf("invalid rand mode: %s, expected %s or %s using %s as fallback\n",
             sw.begin(), STRINGIFY(Uniform), STRINGIFY(Cluster), STRINGIFY(Uniform));
       }
+    }
+    IF_ARG(-v)
+    {
+      input->verbose = true;
     }
     else
     {

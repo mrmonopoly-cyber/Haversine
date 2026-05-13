@@ -1,8 +1,11 @@
 #pragma once
 
-#include "../point/point.h"
-
 #include <haversine_types.h>
+
+enum RandMode : size_t{
+  Uniform=1,
+  Cluster=5,
+};
 
 #define TAB_ALIGN_1 "\t"
 #define TAB_ALIGN_2 "\t\t"
@@ -17,7 +20,8 @@ struct Input{
   u64 num_points = 0;
   size_t nproc;
   const char* o_file_path = DEFAULT_O_FILE;
-  RandMode rand_mode = Uniform;
+  size_t num_clusters = Uniform;
+  bool verbose = false;
 };
 
 s8 _parse_args(int argc, char** argv, Input* input);

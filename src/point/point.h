@@ -6,11 +6,6 @@
 
 #include <haversine_types.h>
 
-enum RandMode{
-  Uniform,
-  Cluster,
-};
-
 struct Point{
   f64 x;
   f64 y;
@@ -38,16 +33,8 @@ static inline f64 _deterministic_rand(
     return min + (((f64)v / (f64)UINT64_MAX) * (max - min));
 }
 
-static inline void _new_point(Point* p, u64 seed, u64 i, u64 comp, RandMode mode)
+static inline void _new_point(Point* p, u64 seed, u64 i, u64 comp)
 {
-  switch (mode) {
-    case Uniform:
-      p->x = _deterministic_rand(seed, i, 1ULL<<comp, -180.0 , 180.0);
-      p->y = _deterministic_rand(seed, i, 1ULL<<(comp+1), -90.0 , 90.0);
-      break;
-    case Cluster:
-      printf("non implemented");
-      abort();
-      break;
-  }
+  p->x = _deterministic_rand(seed, i, 1ULL<<comp, -180.0 , 180.0);
+  p->y = _deterministic_rand(seed, i, 1ULL<<(comp+1), -90.0 , 90.0);
 }

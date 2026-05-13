@@ -39,8 +39,9 @@ struct JsonFillerWorkerArg{
   size_t num_indexes;
   size_t num_points;
   size_t id;
+  size_t cluster_size;
   u64 seed;
-  RandMode mode;
+  bool verbose;
 
   f64 o_partial_sum;
 };
@@ -176,15 +177,21 @@ void* json_filler_worker(void* arg)
   Point p1, p2;
   f64 temp = 0.0;
   f64 sum = 0.0;
+  size_t cluster=1;
   FmtPairInput in_pair;
 
-  printf("worker %zu, %zu -> %zu\n",
+  if(params->verbose)
+  {
+    printf("worker %zu, from %zu to %zu\n",
       params->id, params->starting_index, params->starting_index + params->num_indexes -1);
+  }
 
   for(size_t i=params->starting_index; i< params->starting_index + params->num_indexes; i++)
   {
-    _new_point(&p1, params->seed, i, 0, params->mode);
-    _new_point(&p2, params->seed, i, 1, params->mode);
+    cluster = (i / params->cluster_size)+1;
+    if(params->verbose) printf("worker: %zu, index: %zu, cluster: %zu\n", params->id, i, cluster);
+    _new_point(&p1, cluster * params->seed, i, 0);
+    _new_point(&p2, cluster * params->seed, i, 1);
 
     temp = ReferenceHaversine(p1.x, p1.y, p2.x, p2.y);
     in_pair.p1 = &p1;
@@ -192,6 +199,7 @@ void* json_filler_worker(void* arg)
 
     push_entry_at(params->json_buffer_out, i, &in_pair);
     push_entry_at(params->json_buffer_sol, i, &temp);
+
 
     sum+=temp;
   }
@@ -213,11 +221,12 @@ int main(int argc, char *argv[])
   JsonBuffer json_buffer_sol;
   pthread_t workers[128];
   JsonFillerWorkerArg workers_args[128];
-  size_t section_size;
-
   char dummy_pair[128] = {};
-  size_t pair_len=0;
-  size_t double_len=0;
+  size_t section_size;
+  size_t cluster_size;
+  size_t pair_len;
+  size_t double_len;
+
 
   snprintf(dummy_pair, sizeof(dummy_pair), FMT_PAIRS, p1.x, p1.y, p2.x, p2.y);
   pair_len = strlen(dummy_pair);
@@ -230,6 +239,7 @@ int main(int argc, char *argv[])
     goto end;
   }
 
+
   if (input.nproc > sizeof(workers)/sizeof(workers[0])) {
     printf("reached max num of workers: %zu, capping it to %zu\n",
         input.nproc, sizeof(workers)/sizeof(workers[0]));
@@ -237,6 +247,7 @@ int main(int argc, char *argv[])
   }
 
   section_size = input.num_points / input.nproc;
+  cluster_size = input.num_points / input.num_clusters;
 
   if((res=preallocated_json_buffer(
           JSON_PREFIX("pairs"),
@@ -283,8 +294,9 @@ int main(int argc, char *argv[])
         ((proc==input.nproc-1) * (input.num_points - (proc * section_size))),
       input.num_points,
       proc,
+      cluster_size,
       input.seed,
-      input.rand_mode,
+      input.verbose,
 
       0.0,
     };
@@ -314,7 +326,7 @@ int main(int argc, char *argv[])
   fclose(o_file_sol);
   o_file_sol = nullptr;
 
-  printf("expected sum: " FMT_DOUBLE"\n", acc);
+  printf("\nexpected sum: " FMT_DOUBLE"\n", acc);
 
 end:
   if(json_buffer_out.cap >0) free(json_buffer_out.data);
