@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include <string.h>
 #define NOB_IMPLEMENTATION
 
@@ -6,6 +5,13 @@ extern "C"
 {
 #include "nob.h"
 }
+
+#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
+#define SLASH "/"
+#elif defined(_WIN32)
+#define SLASH "\\"
+#endif // defined (__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
+
 
 #ifndef LIB_DIR
 #define LIB_DIR "lib"
@@ -24,22 +30,20 @@ extern "C"
 #endif // !CPP_COMPILER
 
 #define COMPILER_ARGS \
-  X(-Wall)\
-  X(-Wextra)\
-  X(-pedantic)\
-  X(-xc++)\
-  X(-g)\
-  X(-std=c++17)\
-  X(-fsanitize=address)\
-  X(-I../src/haversine_defs)\
-  X(-I../lib/ryu/build/include/)\
+  X("-Wall")\
+  X("-Wextra")\
+  X("-pedantic")\
+  X("-xc++")\
+  X("-g")\
+  X("-std=c++17")\
+  X("-fsanitize=address")\
+  X("-I.." SLASH"src" SLASH"haversine_defs")\
+  X("-I.." SLASH"lib" SLASH"ryu" SLASH"build" SLASH"include" SLASH)\
 
 #define LINKER_ARGS \
-  X(-Wall)\
-  X(-Wextra)\
-  X(-fsanitize=address)\
-
-// X(-L../lib/ryu/lib/libryu.a)
+  X("-Wall")\
+  X("-Wextra")\
+  X("-fsanitize=address")\
 
 #define O_FILE "main"
 
@@ -56,7 +60,7 @@ bool compile_obj(Nob_Walk_Entry entry)
       )
     )
   {
-#define X(arg) #arg,
+#define X(arg) arg,
     cmd_append(&cmd, CPP_COMPILER, COMPILER_ARGS "-c", entry.path);
 #undef X
 
@@ -77,10 +81,10 @@ int main(int argc, char **argv)
 
   const char* pwd = get_current_dir_temp();
 
-  snprintf(src_dir, sizeof(src_dir), "%s/" SRC_DIR, pwd);
-  snprintf(build_dir, sizeof(build_dir), "%s/" BUILD_DIR, pwd);
+  snprintf(src_dir, sizeof(src_dir), "%s" SLASH SRC_DIR, pwd);
+  snprintf(build_dir, sizeof(build_dir), "%s" SLASH BUILD_DIR, pwd);
 
-#define X(arg) #arg" "
+#define X(arg) arg" "
   nob_log(INFO, "compile args: %s", COMPILER_ARGS);
   nob_log(INFO, "linker args: %s", LINKER_ARGS);
 #undef X
@@ -93,24 +97,28 @@ int main(int argc, char **argv)
   set_current_dir(LIB_DIR);
   if(!file_exists("ryu"))
   {
-    cmd_append(&cmd, "git", "clone", "https://github.com/ulfjack/ryu.git");
+    cmd_append(&cmd, "git", "clone", "https:" SLASH SLASH "github.com" SLASH "ulfjack" SLASH "ryu.git");
     if (!cmd_run(&cmd)) return 1;
   }
 
   set_current_dir("ryu");
-  if(!file_exists(BUILD_DIR)) mkdir_if_not_exists(BUILD_DIR);
+  if(!file_exists(BUILD_DIR)) 
+  {
+    mkdir_if_not_exists(BUILD_DIR);
+    set_current_dir(BUILD_DIR);
+    cmd_append(&cmd, "cmake", "-D CMAKE_INSTALL_PREFIX=.",  "..");
+    if (!cmd_run(&cmd)) return 1;
+  }
   set_current_dir(BUILD_DIR);
-  cmd_append(&cmd, "cmake", "..");
-  if (!cmd_run(&cmd)) return 1;
 
-  cmd_append(&cmd, "sed", "-i", "s/\\/usr\\/local/./", "CMakeCache.txt");
-  if (!cmd_run(&cmd)) return 1;
+  if (!file_exists("include") || !file_exists("lib")) 
+  {
+    cmd_append(&cmd, "make");
+    if (!cmd_run(&cmd)) return 1;
 
-  cmd_append(&cmd, "make");
-  if (!cmd_run(&cmd)) return 1;
-
-  cmd_append(&cmd, "make", "install");
-  if (!cmd_run(&cmd)) return 1;
+    cmd_append(&cmd, "make", "install");
+    if (!cmd_run(&cmd)) return 1;
+  }
   
   set_current_dir(pwd);
 
@@ -118,8 +126,8 @@ int main(int argc, char **argv)
   if(!file_exists(BUILD_DIR)) mkdir_if_not_exists(BUILD_DIR);
   set_current_dir(BUILD_DIR);
 
-  if(!copy_file("../lib/ryu/build/lib/libryu.a", "libryu.a")){
-    printf("failed copy file lib/ryu/lib/libryu.a\n");
+  if(!copy_file(".." SLASH "lib" SLASH "ryu" SLASH"build" SLASH LIB_DIR SLASH"libryu.a", "libryu.a")){
+    printf("failed copy file lib" SLASH"ryu" SLASH "lib" SLASH" libryu.a\n");
     return 1;
   }
 
@@ -131,7 +139,7 @@ int main(int argc, char **argv)
     return 1;
   }
 
-#define X(arg) #arg, 
+#define X(arg) arg, 
   cmd_append(&cmd, CPP_COMPILER, LINKER_ARGS "-o", O_FILE);
 #undef X
 
@@ -159,6 +167,6 @@ int main(int argc, char **argv)
   if (!cmd_run(&cmd)) return 1;
 
   set_current_dir(pwd);
-  copy_file(BUILD_DIR"/main", "./main");
+  copy_file(BUILD_DIR SLASH"main", "main");
   return 0;
 }
