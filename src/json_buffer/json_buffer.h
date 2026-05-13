@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdio.h>
 #include <haversine_types.h>
 #include <stdarg.h>
 
@@ -10,8 +11,7 @@ typedef int (*formatter)(char*, size_t str_len, const void* data);
 
 struct JsonBuffer{
   char* data;
-  char* start_entries;
-  char* start_suffix;
+  FILE* o_file;
   formatter fmt_f;
   size_t entry_len;
   int num_entry;
@@ -19,12 +19,12 @@ struct JsonBuffer{
 };
 
 s8 preallocated_json_buffer(
+    JsonBuffer* self,
     const char* json_prefix,
+    const char* file_name,
     formatter fmt_f,
     size_t num_ele,
-    size_t ele_size,
-    JsonBuffer* out
-    );
+    size_t ele_size);
 
 s8 push_entry_at(JsonBuffer* json, size_t i, void* data);
 void end_json(JsonBuffer* json);

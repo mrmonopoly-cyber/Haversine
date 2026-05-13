@@ -1,7 +1,6 @@
 #include <assert.h>
 #include <pthread.h>
 #include <stdlib.h>
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,44 +49,6 @@ union Ptrf64{
   f64 _f64;
   void* ptr;
 };
-
-static s8 _create_solution_file(Input* input, FILE** out)
-{
-  s8 res=0;
-  const char sol_prefix[] = "solution_";
-  char* sol_path_file = nullptr;
-  char* cur;
-  size_t sol_len = 0;
-
-  sol_len = strlen(input->o_file_path) + strlen(sol_prefix);
-  sol_path_file = (char*) calloc(sol_len + 1, 1);
-
-  if(sol_path_file == nullptr)
-  {
-    res= -99;
-    printf("error allocating solution path name\n");
-    goto bad;
-  }
-  cur = sol_path_file;
-  cur += snprintf(cur, sol_len, "%s", sol_prefix);
-  snprintf(cur, &sol_path_file[sol_len] - cur + 1, "%s", input->o_file_path);
-  *out = fopen(sol_path_file, "w");
-  if (*out == nullptr)
-  {
-    res = -2;
-    printf("error opening o_file %s: %s\n", input->o_file_path, strerror(errno));
-    goto bad;
-  }
-
-  printf("solution_file: %s\n", sol_path_file);
-  free(sol_path_file);
-  return res;
-
-bad:
-  if(sol_path_file)free(sol_path_file);
-  *out = stdout;
-  return res;
-}
 
 struct FmtPairInput{
   Point* p1;
@@ -214,8 +175,6 @@ int main(int argc, char *argv[])
   s8 res=0;
   Input input;
   Point p1={}, p2={};
-  FILE* o_file = stdout;
-  FILE* o_file_sol = stdout;
   f64 acc=0;
   JsonBuffer json_buffer_out;
   JsonBuffer json_buffer_sol;
@@ -226,7 +185,23 @@ int main(int argc, char *argv[])
   size_t cluster_size;
   size_t pair_len;
   size_t double_len;
+  size_t sol_len = 0;
+  char* sol_path_file = nullptr;
+  char* cur;
+  const char sol_prefix[] = "solution_";
 
+  sol_len = strlen(input.o_file_path) + strlen(sol_prefix);
+  sol_path_file = (char*) calloc(sol_len + 1, 1);
+  cur = sol_path_file;
+  cur += snprintf(cur, sol_len, "%s", sol_prefix);
+  snprintf(cur, &sol_path_file[sol_len] - cur + 1, "%s", input.o_file_path);
+
+  if(sol_path_file == nullptr)
+  {
+    res= -99;
+    printf("error allocating solution path name\n");
+    goto end;
+  }
 
   snprintf(dummy_pair, sizeof(dummy_pair), FMT_PAIRS, p1.x, p1.y, p2.x, p2.y);
   pair_len = strlen(dummy_pair);
@@ -250,37 +225,28 @@ int main(int argc, char *argv[])
   cluster_size = input.num_points / input.num_clusters;
 
   if((res=preallocated_json_buffer(
+          &json_buffer_out,
           JSON_PREFIX("pairs"),
+          input.o_file_path,
           formatter_pair,
           input.num_points,
-          pair_len,
-          &json_buffer_out))<0)
+          pair_len
+          ))<0)
   {
     printf("failed preallocating memory for json: %d\n", res);
     goto end;
   }
 
   if((res=preallocated_json_buffer(
+          &json_buffer_sol,
           JSON_PREFIX("solutions"),
+          sol_path_file,
           formatter_sol,
           input.num_points,
-          double_len,
-          &json_buffer_sol))<0)
+          double_len
+          ))<0)
   {
     printf("failed preallocating memory for json: %d\n", res);
-    goto end;
-  }
-
-  if((res =_create_solution_file(&input, &o_file_sol))<0){
-    printf("error creating solution file: %d\n", res);
-    goto end;
-  }
-
-  o_file = fopen(input.o_file_path, "w");
-  if (o_file == nullptr)
-  {
-    res = -2;
-    printf("error opening o_file %s: %s\n", input.o_file_path, strerror(errno));
     goto end;
   }
 
@@ -317,21 +283,9 @@ int main(int argc, char *argv[])
   end_json(&json_buffer_out);
   end_json(&json_buffer_sol);
 
-
-  fprintf(o_file,"%s", json_buffer_out.data);
-  fprintf(o_file_sol,"%s", json_buffer_sol.data);
-
-  fclose(o_file);
-  o_file = nullptr;
-  fclose(o_file_sol);
-  o_file_sol = nullptr;
-
   printf("\nexpected sum: " FMT_DOUBLE"\n", acc);
 
 end:
-  if(json_buffer_out.cap >0) free(json_buffer_out.data);
-  if(json_buffer_sol.cap >0) free(json_buffer_sol.data);
-  if(o_file) fclose(o_file);
-  if(o_file_sol) fclose(o_file_sol);
+  if(sol_path_file) free(sol_path_file);
   return res;
 }
